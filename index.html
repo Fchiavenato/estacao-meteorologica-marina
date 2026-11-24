@@ -2,15 +2,188 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Estação Meteorológica Marina</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Estação Meteorológica Marina</title>
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #0b1929;
+        color: white;
+        text-align: center;
+        margin: 0;
+        padding: 20px;
+    }
+
+    h1 {
+        margin-bottom: 5px;
+    }
+
+    h2 {
+        font-size: 18px;
+        font-weight: normal;
+        color: #a8c4db;
+    }
+
+    .painel {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        max-width: 1000px;
+        margin: 30px auto;
+    }
+
+    .dado {
+        background: #152b40;
+        border: 1px solid #34536c;
+        border-radius: 12px;
+        padding: 20px 8px;
+    }
+
+    .rotulo {
+        font-size: 15px;
+        color: #b4ccdf;
+    }
+
+    .valor {
+        font-size: 30px;
+        font-weight: bold;
+        margin-top: 15px;
+    }
+
+    #atualizacao, #status {
+        font-size: 14px;
+        color: #b4ccdf;
+    }
+
+    footer {
+        margin-top: 40px;
+        font-size: 12px;
+        color: #a8c4db;
+    }
+
+    @media (max-width: 650px) {
+        .painel {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+</style>
 </head>
 
 <body>
-    <h1>Estação Meteorológica Marina</h1>
-    <h2>Ubatuba - SP</h2>
-    <p>Monitoramento meteorológico costeiro</p>
-    <p>Estação em desenvolvimento.</p>
+
+<h1>Estação Meteorológica Marina</h1>
+<h2>Ubatuba – SP | Monitoramento costeiro</h2>
+
+<div class="painel">
+
+    <div class="dado">
+        <div class="rotulo">Temperatura</div>
+        <div class="valor" id="temp">--</div>
+    </div>
+
+    <div class="dado">
+        <div class="rotulo">Umidade relativa</div>
+        <div class="valor" id="umid">--</div>
+    </div>
+
+    <div class="dado">
+        <div class="rotulo">Pressão atmosférica</div>
+        <div class="valor" id="pressao">--</div>
+    </div>
+
+    <div class="dado">
+        <div class="rotulo">Ponto de orvalho</div>
+        <div class="valor" id="orvalho">--</div>
+    </div>
+
+</div>
+
+<p id="atualizacao">Aguardando leitura...</p>
+<p id="status">Conectando ao ThingSpeak...</p>
+
+<footer>
+    Estação meteorológica experimental.<br>
+    Não substitui informações meteorológicas oficiais
+    para a segurança da navegação.
+</footer>
+
+<script>
+
+const canal = 3595649;
+const intervalo = 60000;
+
+function formatar(valor, unidade) {
+    if (valor === null || valor === undefined ||
+        valor === "" || !Number.isFinite(Number(valor))) {
+        return "--";
+    }
+
+    return Number(valor).toFixed(1).replace(".", ",")
+           + " " + unidade;
+}
+
+async function atualizarDados() {
+
+    try {
+
+        const resposta = await fetch(
+            `https://api.thingspeak.com/channels/${canal}/feeds/last.json`,
+            { cache: "no-store" }
+        );
+
+        if (!resposta.ok) {
+            throw new Error("Falha na consulta");
+        }
+
+        const dados = await resposta.json();
+
+        document.getElementById("temp").textContent =
+            formatar(dados.field1, "°C");
+
+        document.getElementById("umid").textContent =
+            formatar(dados.field2, "%");
+
+        const pressao = Number(dados.field3);
+
+        document.getElementById("pressao").textContent =
+            pressao >= 850 && pressao <= 1100
+            ? formatar(dados.field3, "hPa")
+            : "Inválida";
+
+        document.getElementById("orvalho").textContent =
+            formatar(dados.field4, "°C");
+
+        const data = new Date(dados.created_at);
+
+        document.getElementById("atualizacao").textContent =
+            "Última leitura: " +
+            data.toLocaleString("pt-BR", {
+                timeZone: "America/Sao_Paulo"
+            });
+
+        const idade = Date.now() - data.getTime();
+
+        document.getElementById("status").textContent =
+            idade >= 0 && idade < 180000
+            ? "Dados atualizados"
+            : "Atenção: leitura desatualizada";
+
+    } catch (erro) {
+
+        document.getElementById("status").textContent =
+            "Falha na comunicação — última leitura mantida";
+
+    }
+}
+
+atualizarDados();
+
+setInterval(atualizarDados, intervalo);
+
+</script>
+
 </body>
 </html>
