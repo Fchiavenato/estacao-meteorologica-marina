@@ -6,7 +6,32 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <title>Estação Meteorológica Marina</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+    
+.historico {
+    max-width: 1000px;
+    margin: 35px auto;
+}
 
+.grafico {
+    background: #152b40;
+    border: 1px solid #34536c;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.grafico h3 {
+    font-size: 16px;
+    font-weight: normal;
+    color: #b4ccdf;
+}
+
+.grafico canvas {
+    width: 100% !important;
+    height: 280px !important;
+}
+    
 <style>
     body {
         font-family: Arial, sans-serif;
@@ -103,6 +128,21 @@
 
 <p id="atualizacao">Aguardando leitura...</p>
 <p id="status">Conectando ao ThingSpeak...</p>
+    <section class="historico">
+
+    <h2>Histórico meteorológico — 24 horas</h2>
+
+    <div class="grafico">
+        <h3>Pressão atmosférica (hPa)</h3>
+        <canvas id="graficoPressao"></canvas>
+    </div>
+
+    <div class="grafico">
+        <h3>Temperatura (°C)</h3>
+        <canvas id="graficoTemperatura"></canvas>
+    </div>
+
+</section>
 
 <footer>
     Estação meteorológica experimental.<br>
@@ -179,9 +219,129 @@ async function atualizarDados() {
     }
 }
 
+    let chartPressao = null;
+let chartTemperatura = null;
+
+function criarGrafico(id, horarios, valores, cor) {
+
+    return new Chart(document.getElementById(id), {
+        type: "line",
+
+        data: {
+            labels: horarios,
+            datasets: [{
+                data: valores,
+                borderColor: cor,
+                borderWidth: 2,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                tension: 0.2,
+                spanGaps: false
+            }]
+        },
+
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+
+            interaction: {
+                mode: "index",
+                intersect: false
+            },
+
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+
+            scales: {
+                x: {
+                    ticks: {
+                        color: "#b4ccdf",
+                        maxTicksLimit: 12
+                    },
+                    grid: {
+                        color: "#243d52"
+                    }
+                },
+
+                y: {
+                    ticks: {
+                        color: "#b4ccdf"
+                    },
+                    grid: {
+                        color: "#243d52"
+                    }
+                }
+            }
+        }
+    });
+}
+
+async function atualizarHistorico() {
+
+    try {
+
+        const resposta = await fetch(
+            `https://api.thingspeak.com/channels/${canal}/feeds.json?days=1&results=1440`,
+            { cache: "no-store" }
+        );
+
+        if (!resposta.ok) {
+            throw new Error("Falha no histórico");
+        }
+
+        const dados = await resposta.json();
+
+        const horarios = dados.feeds.map(registro =>
+            new Date(registro.created_at).toLocaleTimeString(
+                "pt-BR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    timeZone: "America/Sao_Paulo"
+                }
+            )
+        );
+
+        const pressoes = dados.feeds.map(registro => {
+            const p = Number(registro.field3);
+            return p >= 850 && p <= 1100 ? p : null;
+        });
+
+        const temperaturas = dados.feeds.map(registro =>
+            registro.field1 === null
+                ? null
+                : Number(registro.field1)
+        );
+
+        if (chartPressao) chartPressao.destroy();
+        if (chartTemperatura) chartTemperatura.destroy();
+
+        chartPressao = criarGrafico(
+            "graficoPressao",
+            horarios,
+            pressoes,
+            "#38bdf8"
+        );
+
+        chartTemperatura = criarGrafico(
+            "graficoTemperatura",
+            horarios,
+            temperaturas,
+            "#fbbf24"
+        );
+
+    } catch (erro) {
+        console.error("Erro no histórico:", erro);
+    }
+}
+    
 atualizarDados();
+atualizarHistorico();
 
 setInterval(atualizarDados, intervalo);
+setInterval(atualizarHistorico, intervalo);
 
 </script>
 
